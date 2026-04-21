@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 # Orbit Atlas
 
 Orbit Atlas is a small atmospheric workspace for tracking thoughts, moods, and momentum as a living orbital map.
@@ -44,4 +43,4 @@ npm run dev
 npm run build
 ```
 
->>>>>>> Stashed changes
+
