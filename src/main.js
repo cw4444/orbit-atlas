@@ -32,6 +32,7 @@ app.innerHTML = `
             <select id="moodSelect"></select>
           </label>
           <button id="randomizeBtn" type="button">Reshuffle orbit</button>
+          <button id="galaxyBtn" type="button" aria-pressed="false">Galaxy mode</button>
         </div>
       </div>
       <div class="hero__visual">
@@ -103,9 +104,11 @@ const noteInput = document.querySelector("#noteInput");
 const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
 const randomizeBtn = document.querySelector("#randomizeBtn");
+const galaxyBtn = document.querySelector("#galaxyBtn");
 const restored = loadState();
 
 let currentMood = moods[0];
+let galaxyMode = restored?.galaxyMode ?? false;
 let notes = [
   { text: "Shield the morning", tag: "focus" },
   { text: "Ship one useful thing", tag: "creative" },
@@ -130,6 +133,7 @@ let orbitNodes = seedNodes.map(([label, tag, x, y, size], index) => ({
   angle: index * 1.1,
   speed: 0.002 + index * 0.0005,
   radius: 132 + index * 18,
+  pulse: 0.7 + index * 0.15,
 }));
 
 if (restored?.notes?.length) notes = restored.notes;
@@ -142,6 +146,7 @@ function saveState() {
   const state = {
     moodIndex: Number(moodSelect.value),
     notes,
+    galaxyMode,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -153,9 +158,6 @@ function loadState() {
     return null;
   }
 }
-
-if (restored?.notes?.length) notes = restored.notes;
-if (Number.isInteger(restored?.moodIndex)) moodSelect.value = String(restored.moodIndex);
 
 function populateMoodOptions() {
   moodSelect.innerHTML = moods
@@ -172,6 +174,9 @@ function setMood(index) {
   driftValue.textContent = currentMood.gravity > 0.6 ? "Anchored" : "Light";
   liftValue.textContent = currentMood.energy > 60 ? "High" : "Building";
   document.body.dataset.mood = currentMood.label.toLowerCase();
+  document.body.dataset.galaxy = galaxyMode ? "on" : "off";
+  galaxyBtn.setAttribute("aria-pressed", String(galaxyMode));
+  galaxyBtn.textContent = galaxyMode ? "Galaxy mode: on" : "Galaxy mode";
   renderTimeline();
   saveState();
 }
@@ -227,8 +232,9 @@ function draw(now) {
   const cx = w / 2;
   const cy = h / 2;
   const t = now * 0.00025;
-  const parallaxX = pointer.active ? (pointer.x - 0.5) * 18 : Math.sin(now * 0.0001) * 8;
-  const parallaxY = pointer.active ? (pointer.y - 0.5) * 18 : Math.cos(now * 0.00011) * 6;
+  const zoom = galaxyMode ? 1.18 : 1;
+  const parallaxX = pointer.active ? (pointer.x - 0.5) * (galaxyMode ? 42 : 18) : Math.sin(now * 0.0001) * (galaxyMode ? 16 : 8);
+  const parallaxY = pointer.active ? (pointer.y - 0.5) * (galaxyMode ? 42 : 18) : Math.cos(now * 0.00011) * (galaxyMode ? 12 : 6);
 
   ctx.fillStyle = "rgba(7, 17, 31, 0.18)";
   ctx.fillRect(0, 0, w, h);
@@ -266,9 +272,12 @@ function draw(now) {
   ctx.fill();
 
   orbitNodes.forEach((node, index) => {
-    node.angle += node.speed * (currentMood.gravity * 0.8 + 0.5);
-    const x = cx + parallaxX + Math.cos(node.angle + t) * node.radius * (0.74 + index * 0.02);
-    const y = cy + parallaxY + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * 0.58;
+    const speedBoost = galaxyMode ? 2.1 : 1;
+    node.angle += node.speed * (currentMood.gravity * 0.8 + 0.5) * speedBoost;
+    const orbitRadius = node.radius * zoom * (0.74 + index * 0.02 + (galaxyMode ? 0.08 : 0));
+    const x = cx + parallaxX + Math.cos(node.angle + t) * orbitRadius;
+    const y = cy + parallaxY + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * (galaxyMode ? 0.84 : 0.58);
+    const pulse = galaxyMode ? 0.5 + Math.sin(now * 0.004 + index) * 0.5 : 1;
 
     ctx.strokeStyle = `hsla(${(currentMood.hue + index * 19) % 360}, 85%, 68%, 0.18)`;
     ctx.beginPath();
@@ -278,7 +287,7 @@ function draw(now) {
 
     ctx.fillStyle = `hsla(${(currentMood.hue + index * 16) % 360}, 92%, 72%, 0.95)`;
     ctx.beginPath();
-    ctx.arc(x, y, node.size * 0.8, 0, Math.PI * 2);
+    ctx.arc(x, y, node.size * 0.8 * pulse, 0, Math.PI * 2);
     ctx.fill();
   });
 
@@ -306,6 +315,18 @@ randomizeBtn.addEventListener("click", () => {
     radius: 116 + index * 20 + Math.random() * 18,
     speed: 0.0015 + Math.random() * 0.0015,
   }));
+  saveState();
+});
+
+galaxyBtn.addEventListener("click", () => {
+  galaxyMode = !galaxyMode;
+  orbitNodes = orbitNodes.map((node, index) => ({
+    ...node,
+    radius: galaxyMode ? 96 + index * 34 : 132 + index * 18,
+    speed: (galaxyMode ? 0.0026 : 0.002) + index * 0.0004,
+  }));
+  document.body.classList.toggle("galaxy-mode", galaxyMode);
+  renderTimeline();
   saveState();
 });
 

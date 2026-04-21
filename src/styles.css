@@ -98,6 +98,7 @@ select, input, button {
 button { background: linear-gradient(135deg, hsla(var(--accent-hue), 90%, 62%, 0.22), rgba(255,255,255,0.06)); }
 button:hover, select:hover, input:hover { border-color: rgba(255,255,255,0.22); }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.controls button { white-space: nowrap; }
 
 .hero__visual {
   position: relative;
@@ -148,6 +149,24 @@ canvas { width: 100%; height: 100%; display: block; }
 body[data-mood="spark"] .hero__visual { box-shadow: 0 30px 100px rgba(0,0,0,0.42), 0 0 80px rgba(255, 170, 60, 0.12); }
 body[data-mood="deep"] .hero__visual { box-shadow: 0 30px 100px rgba(0,0,0,0.44), 0 0 90px rgba(72, 116, 255, 0.14); }
 body[data-mood="calm"] .hero__visual { box-shadow: 0 30px 100px rgba(0,0,0,0.38), 0 0 80px rgba(60, 220, 170, 0.1); }
+body.galaxy-mode .hero__visual::before {
+  background:
+    radial-gradient(circle at 25% 20%, rgba(255,255,255,0.14), transparent 14%),
+    radial-gradient(circle at 74% 72%, hsla(var(--accent-hue), 90%, 72%, 0.22), transparent 18%),
+    conic-gradient(from 90deg, transparent, hsla(var(--accent-hue), 90%, 65%, 0.12), transparent 60%);
+}
+body.galaxy-mode .hero__visual::after {
+  border-color: rgba(255,255,255,0.08);
+  inset: 8px;
+  border-radius: 28px;
+}
+body.galaxy-mode .core {
+  width: 176px;
+  box-shadow: inset 0 0 50px rgba(255,255,255,0.06), 0 0 90px hsla(var(--accent-hue), 90%, 60%, 0.24);
+}
+body.galaxy-mode .hero__visual {
+  transform: translateY(-2px);
+}
 
 .timeline__item,
 .note-list li,
@@ -223,4 +242,5 @@ body[data-mood="calm"] .hero__visual { box-shadow: 0 30px 100px rgba(0,0,0,0.38)
   .controls { align-items: stretch; }
   .controls > * { width: 100%; }
   .core { width: 136px; }
+  body.galaxy-mode .core { width: 146px; }
 }
