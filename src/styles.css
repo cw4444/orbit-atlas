@@ -553,3 +553,36 @@ body[data-spotlight="other"] .presentation-clusters__item:nth-child(8) {
 @media (max-width: 640px) {
   .presentation-story { flex-direction: column; align-items: stretch; }
 }
+.presentation-story__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.presentation-story__actions button {
+  white-space: nowrap;
+}
+.presentation-story__actions button.is-active,
+.presentation-story__actions button[aria-pressed="true"] {
+  border-color: hsla(var(--accent-hue), 90%, 68%, 0.55);
+  background: hsla(var(--accent-hue), 90%, 62%, 0.18);
+}
+body[data-spotlight] .presentation-clusters__item {
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+body[data-spotlight="focus"] .presentation-clusters__item:nth-child(1),
+body[data-spotlight="creative"] .presentation-clusters__item:nth-child(2),
+body[data-spotlight="people"] .presentation-clusters__item:nth-child(3),
+body[data-spotlight="admin"] .presentation-clusters__item:nth-child(4),
+body[data-spotlight="rest"] .presentation-clusters__item:nth-child(5),
+body[data-spotlight="priority"] .presentation-clusters__item:nth-child(6),
+body[data-spotlight="ritual"] .presentation-clusters__item:nth-child(7),
+body[data-spotlight="other"] .presentation-clusters__item:nth-child(8) {
+  transform: scale(1.04);
+  border-color: hsla(var(--accent-hue), 90%, 68%, 0.55);
+  background: hsla(var(--accent-hue), 90%, 62%, 0.14);
+}
+@media (max-width: 640px) {
+  .presentation-story__actions { width: 100%; }
+  .presentation-story__actions button { flex: 1; }
+}

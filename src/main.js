@@ -148,7 +148,10 @@ app.innerHTML = `
           <span>Talking point</span>
           <strong id="presentationTalk">This cluster is where the useful work is gathering.</strong>
         </div>
-        <button id="presentationNextBtn" type="button">Next cluster</button>
+        <div class="presentation-story__actions">
+          <button id="presentationNextBtn" type="button">Next cluster</button>
+          <button id="presentationAutoBtn" type="button" aria-pressed="true">Auto tour</button>
+        </div>
       </div>
       <div class="presentation-grid">
         <article class="presentation-card">
@@ -206,6 +209,7 @@ const presentationSpread = document.querySelector("#presentationSpread");
 const presentationSearch = document.querySelector("#presentationSearch");
 const presentationTalk = document.querySelector("#presentationTalk");
 const presentationNextBtn = document.querySelector("#presentationNextBtn");
+const presentationAutoBtn = document.querySelector("#presentationAutoBtn");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -228,6 +232,8 @@ let activeCluster = restored?.activeCluster ?? "all";
 let collapsedClusters = new Set(restored?.collapsedClusters ?? []);
 let presentationMode = restored?.presentationMode ?? false;
 let presentationIndex = restored?.presentationIndex ?? 0;
+let presentationAutoPlay = restored?.presentationAutoPlay ?? true;
+let presentationTimer = null;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -264,6 +270,7 @@ function saveState() {
     collapsedClusters: [...collapsedClusters],
     presentationMode,
     presentationIndex,
+    presentationAutoPlay,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -375,6 +382,8 @@ function renderPresentationDeck() {
     })
     .join("");
   presentationNextBtn.disabled = groups.length === 0;
+  presentationAutoBtn.setAttribute("aria-pressed", String(presentationAutoPlay));
+  presentationAutoBtn.textContent = presentationAutoPlay ? "Auto tour: on" : "Auto tour";
   const spotlightCluster = currentTour.cluster.label.toLowerCase();
   document.body.dataset.spotlight = presentationMode ? spotlightCluster : "off";
 }
@@ -385,8 +394,29 @@ function togglePresentationMode(force) {
   presentationDeck.hidden = !presentationMode;
   presentationBtn.setAttribute("aria-pressed", String(presentationMode));
   presentationBtn.textContent = presentationMode ? "Presentation mode: on" : "Presentation mode";
+  if (presentationMode) startPresentationAutoplay();
+  else stopPresentationAutoplay();
   renderPresentationDeck();
   saveState();
+}
+
+function startPresentationAutoplay() {
+  stopPresentationAutoplay();
+  if (!presentationAutoPlay) return;
+  presentationTimer = setInterval(() => {
+    if (!presentationMode) {
+      stopPresentationAutoplay();
+      return;
+    }
+    advancePresentationTour();
+  }, 6500);
+}
+
+function stopPresentationAutoplay() {
+  if (presentationTimer) {
+    clearInterval(presentationTimer);
+    presentationTimer = null;
+  }
 }
 
 function advancePresentationTour() {
@@ -397,6 +427,16 @@ function advancePresentationTour() {
   activeCluster = nextCluster;
   renderNotes();
   renderTimeline();
+  renderPresentationDeck();
+  saveState();
+}
+
+function togglePresentationAutoplay() {
+  presentationAutoPlay = !presentationAutoPlay;
+  if (presentationMode) {
+    if (presentationAutoPlay) startPresentationAutoplay();
+    else stopPresentationAutoplay();
+  }
   renderPresentationDeck();
   saveState();
 }
@@ -837,6 +877,10 @@ presentationNextBtn.addEventListener("click", () => {
   advancePresentationTour();
 });
 
+presentationAutoBtn.addEventListener("click", () => {
+  togglePresentationAutoplay();
+});
+
 exportBtn.addEventListener("click", async () => {
   const payload = JSON.stringify({ moodIndex: Number(moodSelect.value), galaxyMode, notes }, null, 2);
   const blob = new Blob([payload], { type: "application/json" });
@@ -943,6 +987,7 @@ ensureNotePositions();
 renderNotes();
 setMood(Number(moodSelect.value || 0));
 presentationDeck.hidden = !presentationMode;
+if (presentationMode) startPresentationAutoplay();
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 requestAnimationFrame(draw);
