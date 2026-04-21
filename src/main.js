@@ -18,6 +18,17 @@ const seedNodes = [
   ["Inbox zero", "admin", -0.78, -0.08, 14],
 ];
 
+const clusterPalette = {
+  focus: { label: "Focus", x: 0.52, y: 0.24, colorShift: 0 },
+  creative: { label: "Creative", x: 0.78, y: 0.52, colorShift: 18 },
+  people: { label: "People", x: 0.56, y: 0.76, colorShift: 36 },
+  admin: { label: "Admin", x: 0.26, y: 0.66, colorShift: 54 },
+  rest: { label: "Rest", x: 0.2, y: 0.34, colorShift: 72 },
+  priority: { label: "Priority", x: 0.36, y: 0.18, colorShift: 96 },
+  ritual: { label: "Ritual", x: 0.68, y: 0.18, colorShift: 120 },
+  other: { label: "Other", x: 0.82, y: 0.32, colorShift: 144 },
+};
+
 const app = document.querySelector("#app");
 app.innerHTML = `
   <main class="shell">
@@ -128,6 +139,7 @@ let notes = [
 ];
 let pointer = { x: 0, y: 0, active: false };
 let dragState = null;
+let clusterClock = 0;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -240,11 +252,28 @@ function renderNotes() {
 }
 
 function ensureNotePositions() {
-  notes = notes.map((note, index) => ({
-    ...note,
-    x: typeof note.x === "number" ? note.x : 0.2 + (index * 0.18) % 0.6,
-    y: typeof note.y === "number" ? note.y : 0.18 + (index * 0.23) % 0.64,
-  }));
+  const grouped = new Map();
+  notes.forEach((note) => {
+    const key = clusterPalette[note.tag]?.label ?? "Other";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(note);
+  });
+
+  const arranged = [];
+  grouped.forEach((groupNotes, key) => {
+    const cluster = Object.values(clusterPalette).find((item) => item.label === key) ?? clusterPalette.other;
+    groupNotes.forEach((note, index) => {
+      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1);
+      const radius = groupNotes.length === 1 ? 0 : 0.07 + index * 0.012;
+      arranged.push({
+        ...note,
+        x: typeof note.x === "number" ? note.x : cluster.x + Math.cos(angle) * radius,
+        y: typeof note.y === "number" ? note.y : cluster.y + Math.sin(angle) * radius,
+      });
+    });
+  });
+
+  notes = arranged;
 }
 
 function renderNoteLayer() {
@@ -313,14 +342,22 @@ function handleReorderClick(event) {
   moveNote(index, direction);
 }
 
-function noteConnections() {
-  const groups = new Map();
+function clusterForTag(tag) {
+  return clusterPalette[tag] ?? clusterPalette.other;
+}
+
+function noteClusters() {
+  const grouped = new Map();
   notes.forEach((note, index) => {
-    const key = note.tag || "other";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(index);
+    const cluster = clusterForTag(note.tag);
+    if (!grouped.has(cluster.label)) grouped.set(cluster.label, { cluster, indices: [] });
+    grouped.get(cluster.label).indices.push(index);
   });
-  return [...groups.values()].flatMap((indices) =>
+  return [...grouped.values()];
+}
+
+function noteConnections() {
+  return noteClusters().flatMap(({ indices }) =>
     indices.slice(1).map((current, idx) => [indices[idx], current])
   );
 }
@@ -384,6 +421,30 @@ function draw(now) {
     ctx.stroke();
   });
 
+  const clusters = noteClusters();
+  clusters.forEach(({ cluster, indices }, index) => {
+    const hubX = cx + (cluster.x - 0.5) * w * (galaxyMode ? 0.96 : 0.78);
+    const hubY = cy + (cluster.y - 0.5) * h * (galaxyMode ? 0.96 : 0.78);
+    const halo = ctx.createRadialGradient(hubX, hubY, 8, hubX, hubY, 92);
+    halo.addColorStop(0, `hsla(${(currentMood.hue + cluster.colorShift) % 360}, 92%, 70%, 0.22)`);
+    halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(hubX, hubY, 92, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `hsla(${(currentMood.hue + cluster.colorShift) % 360}, 90%, 68%, 0.38)`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(hubX, hubY, 8 + indices.length * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = `hsla(${(currentMood.hue + cluster.colorShift) % 360}, 90%, 80%, 0.95)`;
+    ctx.beginPath();
+    ctx.arc(hubX, hubY, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
   [0.22, 0.34, 0.46].forEach((ratio) => {
@@ -417,6 +478,23 @@ function draw(now) {
     ctx.fill();
   });
 
+  clusters.forEach(({ cluster, indices }) => {
+    const hubX = cx + (cluster.x - 0.5) * w * (galaxyMode ? 0.96 : 0.78);
+    const hubY = cy + (cluster.y - 0.5) * h * (galaxyMode ? 0.96 : 0.78);
+    const labelFloat = Math.sin(now * 0.001 + indices.length) * 4;
+    const label = `${cluster.label} ${indices.length}`;
+    ctx.fillStyle = "rgba(5, 10, 18, 0.78)";
+    const textWidth = ctx.measureText(label).width;
+    const labelX = hubX - textWidth / 2 - 10;
+    const labelY = hubY - 28 + labelFloat;
+    ctx.beginPath();
+    ctx.roundRect(labelX - 6, labelY - 14, textWidth + 12, 28, 14);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${(currentMood.hue + cluster.colorShift) % 360}, 88%, 84%, 0.95)`;
+    ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(label, labelX, labelY + 5);
+  });
+
   requestAnimationFrame(draw);
 }
 
@@ -424,7 +502,8 @@ noteForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const text = noteInput.value.trim();
   if (!text) return;
-  notes = [{ text, tag: tagInput.value }, ...notes].slice(0, 8);
+  const cluster = clusterForTag(tagInput.value);
+  notes = [{ text, tag: tagInput.value, x: cluster.x, y: cluster.y }, ...notes].slice(0, 8);
   ensureNotePositions();
   noteInput.value = "";
   renderNotes();
@@ -494,6 +573,39 @@ importFile.addEventListener("change", async () => {
     importFile.value = "";
   }
 });
+
+function rebalanceClusters() {
+  const grouped = new Map();
+  notes.forEach((note) => {
+    const cluster = clusterForTag(note.tag);
+    if (!grouped.has(cluster.label)) grouped.set(cluster.label, []);
+    grouped.get(cluster.label).push(note);
+  });
+
+  const redistributed = [];
+  grouped.forEach((groupNotes, label) => {
+    const cluster = Object.values(clusterPalette).find((item) => item.label === label) ?? clusterPalette.other;
+    groupNotes.forEach((note, index) => {
+      const jitter = 0.045 + index * 0.01;
+      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1) + clusterClock;
+      redistributed.push({
+        ...note,
+        x: cluster.x + Math.cos(angle) * jitter,
+        y: cluster.y + Math.sin(angle) * jitter,
+      });
+    });
+  });
+
+  notes = redistributed;
+  renderNotes();
+  saveState();
+}
+
+setInterval(() => {
+  if (dragState) return;
+  clusterClock += 0.08;
+  rebalanceClusters();
+}, 9000);
 
 window.addEventListener("pointermove", (event) => {
   const rect = canvas.getBoundingClientRect();
