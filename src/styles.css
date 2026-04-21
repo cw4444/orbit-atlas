@@ -131,6 +131,45 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   border: 1px solid rgba(255,255,255,0.05);
 }
 canvas { width: 100%; height: 100%; display: block; }
+.note-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.note-node {
+  position: absolute;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  width: min(220px, 32vw);
+  text-align: left;
+  border-radius: 22px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(8, 13, 24, 0.58);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.26);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.note-node:hover {
+  transform: translate(-50%, -50%) scale(1.02);
+  border-color: hsla(var(--accent-hue), 90%, 68%, 0.5);
+  background: rgba(8, 13, 24, 0.74);
+}
+.note-node span,
+.note-node strong {
+  display: block;
+}
+.note-node span {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.note-node strong {
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
 .core {
   position: absolute;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -163,6 +202,9 @@ body.galaxy-mode .hero__visual::after {
 body.galaxy-mode .core {
   width: 176px;
   box-shadow: inset 0 0 50px rgba(255,255,255,0.06), 0 0 90px hsla(var(--accent-hue), 90%, 60%, 0.24);
+}
+body.galaxy-mode .note-node {
+  background: rgba(5, 10, 18, 0.76);
 }
 body.galaxy-mode .hero__visual {
   transform: translateY(-2px);
@@ -243,4 +285,5 @@ body.galaxy-mode .hero__visual {
   .controls > * { width: 100%; }
   .core { width: 136px; }
   body.galaxy-mode .core { width: 146px; }
+  .note-node { width: min(180px, 46vw); }
 }

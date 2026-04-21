@@ -33,10 +33,13 @@ app.innerHTML = `
           </label>
           <button id="randomizeBtn" type="button">Reshuffle orbit</button>
           <button id="galaxyBtn" type="button" aria-pressed="false">Galaxy mode</button>
+          <button id="exportBtn" type="button">Export state</button>
+          <button id="importBtn" type="button">Import state</button>
         </div>
       </div>
       <div class="hero__visual">
         <canvas id="orbitCanvas" aria-label="Animated orbit visual"></canvas>
+        <div id="noteLayer" class="note-layer" aria-label="Draggable notes"></div>
         <div class="core">
           <span class="core__label">Signal core</span>
           <strong id="coreValue">72%</strong>
@@ -105,16 +108,20 @@ const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
 const randomizeBtn = document.querySelector("#randomizeBtn");
 const galaxyBtn = document.querySelector("#galaxyBtn");
+const exportBtn = document.querySelector("#exportBtn");
+const importBtn = document.querySelector("#importBtn");
+const noteLayer = document.querySelector("#noteLayer");
 const restored = loadState();
 
 let currentMood = moods[0];
 let galaxyMode = restored?.galaxyMode ?? false;
 let notes = [
-  { text: "Shield the morning", tag: "focus" },
-  { text: "Ship one useful thing", tag: "creative" },
-  { text: "Answer the obvious messages", tag: "people" },
+  { text: "Shield the morning", tag: "focus", x: 0.25, y: 0.2 },
+  { text: "Ship one useful thing", tag: "creative", x: 0.72, y: 0.42 },
+  { text: "Answer the obvious messages", tag: "people", x: 0.37, y: 0.73 },
 ];
 let pointer = { x: 0, y: 0, active: false };
+let dragState = null;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -207,13 +214,72 @@ function renderNotes() {
   noteList.innerHTML = notes
     .slice(0, 6)
     .map(
-      (note) => `
-      <li>
+      (note, index) => `
+      <li data-index="${index}">
         <span>${note.tag}</span>
         <strong>${note.text}</strong>
       </li>`
     )
     .join("");
+  renderNoteLayer();
+}
+
+function ensureNotePositions() {
+  notes = notes.map((note, index) => ({
+    ...note,
+    x: typeof note.x === "number" ? note.x : 0.2 + (index * 0.18) % 0.6,
+    y: typeof note.y === "number" ? note.y : 0.18 + (index * 0.23) % 0.64,
+  }));
+}
+
+function renderNoteLayer() {
+  noteLayer.innerHTML = notes
+    .map(
+      (note, index) => {
+        const x = Math.max(0.08, Math.min(0.92, note.x ?? 0.5));
+        const y = Math.max(0.08, Math.min(0.88, note.y ?? 0.5));
+        return `
+          <button class="note-node" data-index="${index}" style="left:${x * 100}%; top:${y * 100}%;">
+            <span>${note.tag}</span>
+            <strong>${note.text}</strong>
+          </button>`;
+      }
+    )
+    .join("");
+  noteLayer.querySelectorAll(".note-node").forEach((node) => {
+    node.addEventListener("pointerdown", startDragNote);
+  });
+}
+
+function startDragNote(event) {
+  event.preventDefault();
+  const index = Number(event.currentTarget.dataset.index);
+  const rect = canvas.getBoundingClientRect();
+  dragState = {
+    index,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    rect,
+  };
+  event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function updateDraggedNote(clientX, clientY) {
+  if (dragState == null) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left) / rect.width;
+  const y = (clientY - rect.top) / rect.height;
+  notes = notes.map((note, index) =>
+    index === dragState.index
+      ? { ...note, x: Math.max(0.08, Math.min(0.92, x)), y: Math.max(0.08, Math.min(0.88, y)) }
+      : note
+  );
+  renderNotes();
+  saveState();
+}
+
+function endDragNote() {
+  dragState = null;
 }
 
 function resizeCanvas() {
@@ -299,6 +365,7 @@ noteForm.addEventListener("submit", (event) => {
   const text = noteInput.value.trim();
   if (!text) return;
   notes = [{ text, tag: tagInput.value }, ...notes].slice(0, 8);
+  ensureNotePositions();
   noteInput.value = "";
   renderNotes();
   renderTimeline();
@@ -330,6 +397,35 @@ galaxyBtn.addEventListener("click", () => {
   saveState();
 });
 
+exportBtn.addEventListener("click", async () => {
+  const payload = JSON.stringify({ moodIndex: Number(moodSelect.value), galaxyMode, notes }, null, 2);
+  try {
+    await navigator.clipboard.writeText(payload);
+    exportBtn.textContent = "State copied";
+    setTimeout(() => (exportBtn.textContent = "Export state"), 1200);
+  } catch {
+    window.prompt("Copy Orbit Atlas state", payload);
+  }
+});
+
+importBtn.addEventListener("click", () => {
+  const raw = window.prompt("Paste Orbit Atlas state JSON");
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.notes)) notes = parsed.notes;
+    if (Number.isInteger(parsed.moodIndex)) moodSelect.value = String(parsed.moodIndex);
+    galaxyMode = Boolean(parsed.galaxyMode);
+    ensureNotePositions();
+    setMood(Number(moodSelect.value || 0));
+    document.body.classList.toggle("galaxy-mode", galaxyMode);
+    renderNotes();
+    saveState();
+  } catch {
+    window.alert("That JSON could not be read.");
+  }
+});
+
 window.addEventListener("pointermove", (event) => {
   const rect = canvas.getBoundingClientRect();
   pointer = {
@@ -337,13 +433,18 @@ window.addEventListener("pointermove", (event) => {
     y: (event.clientY - rect.top) / rect.height,
     active: event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom,
   };
+  if (dragState) updateDraggedNote(event.clientX, event.clientY);
 });
 
 window.addEventListener("pointerleave", () => {
   pointer.active = false;
 });
 
+window.addEventListener("pointerup", endDragNote);
+window.addEventListener("pointercancel", endDragNote);
+
 populateMoodOptions();
+ensureNotePositions();
 renderNotes();
 setMood(Number(moodSelect.value || 0));
 resizeCanvas();
