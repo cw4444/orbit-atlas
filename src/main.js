@@ -44,6 +44,7 @@ app.innerHTML = `
           </label>
           <button id="randomizeBtn" type="button">Reshuffle orbit</button>
           <button id="galaxyBtn" type="button" aria-pressed="false">Galaxy mode</button>
+          <button id="presentationBtn" type="button" aria-pressed="false">Presentation mode</button>
           <button id="exportBtn" type="button">Download backup</button>
           <button id="importBtn" type="button">Restore backup</button>
         </div>
@@ -90,6 +91,7 @@ app.innerHTML = `
         <div class="cluster-search">
           <input id="searchInput" type="search" placeholder="Search notes or tags" />
         </div>
+        <div id="clusterFilter" class="cluster-filter"></div>
         <div id="clusterBoard" class="cluster-board"></div>
       </div>
 
@@ -113,6 +115,32 @@ app.innerHTML = `
         <ul id="noteList" class="note-list"></ul>
       </div>
     </section>
+
+    <section id="presentationDeck" class="presentation-deck" aria-label="Presentation mode overview">
+      <div class="presentation-deck__hero">
+        <p class="eyebrow">Presentation mode</p>
+        <h2>Orbit Atlas, distilled.</h2>
+        <p class="lede">A clean live board for showing the current shape of your thoughts, clusters, and momentum without the editing chrome.</p>
+      </div>
+      <div class="presentation-grid">
+        <article class="presentation-card">
+          <span>Current mood</span>
+          <strong id="presentationMood">Clear</strong>
+        </article>
+        <article class="presentation-card">
+          <span>Active cluster</span>
+          <strong id="presentationCluster">All</strong>
+        </article>
+        <article class="presentation-card">
+          <span>Live notes</span>
+          <strong id="presentationNotes">3</strong>
+        </article>
+        <article class="presentation-card presentation-card--wide">
+          <span>Cluster board</span>
+          <div id="presentationClusters" class="presentation-clusters"></div>
+        </article>
+      </div>
+    </section>
   </main>
 `;
 
@@ -130,12 +158,19 @@ const noteInput = document.querySelector("#noteInput");
 const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
 const searchInput = document.querySelector("#searchInput");
+const clusterFilter = document.querySelector("#clusterFilter");
 const clusterBoard = document.querySelector("#clusterBoard");
 const randomizeBtn = document.querySelector("#randomizeBtn");
 const galaxyBtn = document.querySelector("#galaxyBtn");
 const exportBtn = document.querySelector("#exportBtn");
 const importBtn = document.querySelector("#importBtn");
+const presentationBtn = document.querySelector("#presentationBtn");
 const noteLayer = document.querySelector("#noteLayer");
+const presentationDeck = document.querySelector("#presentationDeck");
+const presentationMood = document.querySelector("#presentationMood");
+const presentationCluster = document.querySelector("#presentationCluster");
+const presentationNotes = document.querySelector("#presentationNotes");
+const presentationClusters = document.querySelector("#presentationClusters");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -154,6 +189,9 @@ let pointer = { x: 0, y: 0, active: false };
 let dragState = null;
 let clusterClock = 0;
 let searchTerm = "";
+let activeCluster = restored?.activeCluster ?? "all";
+let collapsedClusters = new Set(restored?.collapsedClusters ?? []);
+let presentationMode = restored?.presentationMode ?? false;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -186,6 +224,9 @@ function saveState() {
     moodIndex: Number(moodSelect.value),
     notes,
     galaxyMode,
+    activeCluster,
+    collapsedClusters: [...collapsedClusters],
+    presentationMode,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -214,9 +255,15 @@ function setMood(index) {
   liftValue.textContent = currentMood.energy > 60 ? "High" : "Building";
   document.body.dataset.mood = currentMood.label.toLowerCase();
   document.body.dataset.galaxy = galaxyMode ? "on" : "off";
+  document.body.dataset.presentation = presentationMode ? "on" : "off";
   galaxyBtn.setAttribute("aria-pressed", String(galaxyMode));
   galaxyBtn.textContent = galaxyMode ? "Galaxy mode: on" : "Galaxy mode";
+  presentationBtn.setAttribute("aria-pressed", String(presentationMode));
+  presentationBtn.textContent = presentationMode ? "Presentation mode: on" : "Presentation mode";
+  presentationDeck.hidden = !presentationMode;
+  document.body.classList.toggle("presentation-mode", presentationMode);
   renderTimeline();
+  renderPresentationDeck();
   saveState();
 }
 
@@ -242,13 +289,59 @@ function renderTimeline() {
     .join("");
 }
 
+function renderPresentationDeck() {
+  presentationMood.textContent = currentMood.label;
+  presentationCluster.textContent =
+    activeCluster === "all"
+      ? "All"
+      : activeCluster.charAt(0).toUpperCase() + activeCluster.slice(1);
+  presentationNotes.textContent = String(notes.length);
+  const groups = noteClusters();
+  presentationClusters.innerHTML = groups
+    .map(({ cluster, indices }) => {
+      const isActive = activeCluster === "all" || activeCluster === cluster.label.toLowerCase();
+      return `
+        <div class="presentation-clusters__item ${isActive ? "is-active" : ""}">
+          <span>${cluster.label}</span>
+          <strong>${indices.length}</strong>
+        </div>`;
+    })
+    .join("");
+}
+
+function togglePresentationMode(force) {
+  presentationMode = typeof force === "boolean" ? force : !presentationMode;
+  document.body.classList.toggle("presentation-mode", presentationMode);
+  presentationDeck.hidden = !presentationMode;
+  presentationBtn.setAttribute("aria-pressed", String(presentationMode));
+  presentationBtn.textContent = presentationMode ? "Presentation mode: on" : "Presentation mode";
+  renderPresentationDeck();
+  saveState();
+}
+
 function getFilteredNotes() {
   const term = searchTerm.trim().toLowerCase();
-  if (!term) return notes;
+  if (!term && activeCluster === "all") return notes;
   return notes.filter((note) => {
     const haystack = `${note.text} ${note.tag}`.toLowerCase();
-    return haystack.includes(term);
+    const tagMatch = activeCluster === "all" || note.tag === activeCluster;
+    return haystack.includes(term) && tagMatch;
   });
+}
+
+function getVisibleClusterNames() {
+  const term = searchTerm.trim().toLowerCase();
+  return noteClusters()
+    .filter(({ cluster, indices }) => {
+      const clusterName = cluster.label.toLowerCase();
+      const searchMatch = !term || clusterName.includes(term) || indices.some((index) => {
+        const note = notes[index];
+        return `${note.text} ${note.tag}`.toLowerCase().includes(term);
+      });
+      const activeMatch = activeCluster === "all" || clusterName === activeCluster;
+      return searchMatch && activeMatch && !collapsedClusters.has(clusterName);
+    })
+    .map(({ cluster }) => cluster.label.toLowerCase());
 }
 
 function renderNotes() {
@@ -286,6 +379,7 @@ function renderNotes() {
   noteList.querySelectorAll("select[data-action='tag']").forEach((select) => {
     select.addEventListener("change", handleRetagChange);
   });
+  renderClusterFilter();
 }
 
 function ensureNotePositions() {
@@ -319,7 +413,10 @@ function renderNoteLayer() {
       (note, index) => {
         const x = Math.max(0.08, Math.min(0.92, note.x ?? 0.5));
         const y = Math.max(0.08, Math.min(0.88, note.y ?? 0.5));
-        const active = !searchTerm || `${note.text} ${note.tag}`.toLowerCase().includes(searchTerm.toLowerCase());
+        const clusterName = clusterForTag(note.tag).label.toLowerCase();
+        const active = (!searchTerm || `${note.text} ${note.tag}`.toLowerCase().includes(searchTerm.toLowerCase()))
+          && (activeCluster === "all" || activeCluster === clusterName)
+          && !collapsedClusters.has(clusterName);
         return `
           <button class="note-node ${active ? "" : "is-muted"}" data-index="${index}" style="left:${x * 100}%; top:${y * 100}%;">
             <span>${note.tag}</span>
@@ -404,9 +501,11 @@ function noteClusters() {
 }
 
 function noteConnections() {
-  return noteClusters().flatMap(({ indices }) =>
-    indices.slice(1).map((current, idx) => [indices[idx], current])
-  );
+  return noteClusters()
+    .filter(({ cluster }) => activeCluster === "all" || cluster.label.toLowerCase() === activeCluster)
+    .flatMap(({ indices }) =>
+      indices.slice(1).map((current, idx) => [indices[idx], current])
+    );
 }
 
 function renderClusters() {
@@ -418,16 +517,54 @@ function renderClusters() {
         .map((index) => notes[index]?.text)
         .filter(Boolean)
         .join(" • ");
+      const clusterName = cluster.label.toLowerCase();
+      const isCollapsed = collapsedClusters.has(clusterName);
       return `
-        <article class="cluster-card">
+        <article class="cluster-card ${isCollapsed ? "is-collapsed" : ""}">
           <div class="cluster-card__top">
             <span>${cluster.label}</span>
             <strong>${indices.length}</strong>
           </div>
           <p>${preview || "No notes yet"}</p>
+          <div class="cluster-card__actions">
+            <button type="button" data-cluster="${clusterName}" data-action="focus">Focus</button>
+            <button type="button" data-cluster="${clusterName}" data-action="toggle">${isCollapsed ? "Expand" : "Collapse"}</button>
+          </div>
         </article>`;
     })
     .join("");
+  clusterBoard.querySelectorAll("button[data-action]").forEach((button) => {
+    button.addEventListener("click", handleClusterAction);
+  });
+}
+
+function renderClusterFilter() {
+  const groups = noteClusters();
+  clusterFilter.innerHTML = [
+    `<button type="button" data-cluster="all" class="${activeCluster === "all" ? "is-active" : ""}">All</button>`,
+    ...groups.map(({ cluster }) => `<button type="button" data-cluster="${cluster.label.toLowerCase()}" class="${activeCluster === cluster.label.toLowerCase() ? "is-active" : ""}">${cluster.label}</button>`),
+  ].join("");
+  clusterFilter.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeCluster = button.dataset.cluster;
+      renderNotes();
+      renderTimeline();
+      saveState();
+    });
+  });
+}
+
+function handleClusterAction(event) {
+  const cluster = event.currentTarget.dataset.cluster;
+  const action = event.currentTarget.dataset.action;
+  if (action === "focus") activeCluster = cluster;
+  if (action === "toggle") {
+    if (collapsedClusters.has(cluster)) collapsedClusters.delete(cluster);
+    else collapsedClusters.add(cluster);
+  }
+  renderNotes();
+  renderTimeline();
+  saveState();
 }
 
 function resizeCanvas() {
@@ -610,6 +747,10 @@ galaxyBtn.addEventListener("click", () => {
   saveState();
 });
 
+presentationBtn.addEventListener("click", () => {
+  togglePresentationMode();
+});
+
 exportBtn.addEventListener("click", async () => {
   const payload = JSON.stringify({ moodIndex: Number(moodSelect.value), galaxyMode, notes }, null, 2);
   const blob = new Blob([payload], { type: "application/json" });
@@ -659,9 +800,12 @@ function rebalanceClusters() {
   const redistributed = [];
   grouped.forEach((groupNotes, label) => {
     const cluster = Object.values(clusterPalette).find((item) => item.label === label) ?? clusterPalette.other;
+    const clusterName = cluster.label.toLowerCase();
+    const focused = activeCluster === clusterName;
+    const spread = focused ? 0.075 : 0.045;
     groupNotes.forEach((note, index) => {
-      const jitter = 0.045 + index * 0.01;
-      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1) + clusterClock;
+      const jitter = spread + index * 0.01;
+      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1) + clusterClock + (focused ? 0.25 : 0);
       redistributed.push({
         ...note,
         x: cluster.x + Math.cos(angle) * jitter,
@@ -698,10 +842,21 @@ window.addEventListener("pointerleave", () => {
 window.addEventListener("pointerup", endDragNote);
 window.addEventListener("pointercancel", endDragNote);
 
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && presentationMode) {
+    togglePresentationMode(false);
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+    event.preventDefault();
+    togglePresentationMode();
+  }
+});
+
 populateMoodOptions();
 ensureNotePositions();
 renderNotes();
 setMood(Number(moodSelect.value || 0));
+presentationDeck.hidden = !presentationMode;
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 requestAnimationFrame(draw);
