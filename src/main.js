@@ -143,6 +143,13 @@ app.innerHTML = `
           </div>
         </div>
       </div>
+      <div class="presentation-story">
+        <div>
+          <span>Talking point</span>
+          <strong id="presentationTalk">This cluster is where the useful work is gathering.</strong>
+        </div>
+        <button id="presentationNextBtn" type="button">Next cluster</button>
+      </div>
       <div class="presentation-grid">
         <article class="presentation-card">
           <span>Current mood</span>
@@ -197,6 +204,8 @@ const presentationSummaryBody = document.querySelector("#presentationSummaryBody
 const presentationDominant = document.querySelector("#presentationDominant");
 const presentationSpread = document.querySelector("#presentationSpread");
 const presentationSearch = document.querySelector("#presentationSearch");
+const presentationTalk = document.querySelector("#presentationTalk");
+const presentationNextBtn = document.querySelector("#presentationNextBtn");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -218,6 +227,7 @@ let searchTerm = "";
 let activeCluster = restored?.activeCluster ?? "all";
 let collapsedClusters = new Set(restored?.collapsedClusters ?? []);
 let presentationMode = restored?.presentationMode ?? false;
+let presentationIndex = restored?.presentationIndex ?? 0;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -253,6 +263,7 @@ function saveState() {
     activeCluster,
     collapsedClusters: [...collapsedClusters],
     presentationMode,
+    presentationIndex,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -328,6 +339,10 @@ function renderPresentationDeck() {
   const dominantCount = dominantGroup?.indices.length ?? 0;
   const totalVisible = getFilteredNotes().length;
   const visibleNames = getVisibleClusterNames();
+  const orderedGroups = groups.length ? groups : [{ cluster: clusterPalette.other, indices: [] }];
+  const currentTour = orderedGroups[presentationIndex % orderedGroups.length];
+  const tourLabel = currentTour.cluster.label;
+  const tourCount = currentTour.indices.length;
   const spread = totalVisible >= 6 ? "Wide" : totalVisible >= 3 ? "Balanced" : "Compact";
   const searchLabel = searchTerm.trim() ? searchTerm.trim() : activeCluster === "all" ? "None" : activeCluster;
   const title =
@@ -345,6 +360,10 @@ function renderPresentationDeck() {
   presentationDominant.textContent = dominantLabel;
   presentationSpread.textContent = spread;
   presentationSearch.textContent = searchLabel;
+  presentationTalk.textContent =
+    tourCount === 0
+      ? `The ${tourLabel.toLowerCase()} cluster is empty right now.`
+      : `The ${tourLabel.toLowerCase()} cluster has ${tourCount} note${tourCount === 1 ? "" : "s"}, and it helps explain the whole map.`;
   presentationClusters.innerHTML = groups
     .map(({ cluster, indices }) => {
       const isActive = activeCluster === "all" || activeCluster === cluster.label.toLowerCase();
@@ -355,6 +374,9 @@ function renderPresentationDeck() {
         </div>`;
     })
     .join("");
+  presentationNextBtn.disabled = groups.length === 0;
+  const spotlightCluster = currentTour.cluster.label.toLowerCase();
+  document.body.dataset.spotlight = presentationMode ? spotlightCluster : "off";
 }
 
 function togglePresentationMode(force) {
@@ -363,6 +385,18 @@ function togglePresentationMode(force) {
   presentationDeck.hidden = !presentationMode;
   presentationBtn.setAttribute("aria-pressed", String(presentationMode));
   presentationBtn.textContent = presentationMode ? "Presentation mode: on" : "Presentation mode";
+  renderPresentationDeck();
+  saveState();
+}
+
+function advancePresentationTour() {
+  const groups = noteClusters();
+  if (!groups.length) return;
+  presentationIndex = (presentationIndex + 1) % groups.length;
+  const nextCluster = groups[presentationIndex].cluster.label.toLowerCase();
+  activeCluster = nextCluster;
+  renderNotes();
+  renderTimeline();
   renderPresentationDeck();
   saveState();
 }
@@ -797,6 +831,10 @@ galaxyBtn.addEventListener("click", () => {
 
 presentationBtn.addEventListener("click", () => {
   togglePresentationMode();
+});
+
+presentationNextBtn.addEventListener("click", () => {
+  advancePresentationTour();
 });
 
 exportBtn.addEventListener("click", async () => {
