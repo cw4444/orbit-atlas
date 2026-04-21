@@ -344,3 +344,34 @@ body.galaxy-mode .hero__visual {
   body.galaxy-mode .core { width: 146px; }
   .note-node { width: min(180px, 46vw); }
 }
+.cluster-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cluster-filter button {
+  padding: 0.55rem 0.9rem;
+  font-size: 0.82rem;
+}
+.cluster-filter button.is-active {
+  border-color: hsla(var(--accent-hue), 90%, 68%, 0.55);
+  background: hsla(var(--accent-hue), 90%, 62%, 0.18);
+}
+.cluster-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.cluster-card__actions button {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.82rem;
+}
+.cluster-card.is-collapsed {
+  opacity: 0.72;
+}
+@media (max-width: 640px) {
+  .note-list li { flex-direction: column; align-items: stretch; }
+  .note-actions { flex-wrap: wrap; }
+}

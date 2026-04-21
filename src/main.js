@@ -90,6 +90,7 @@ app.innerHTML = `
         <div class="cluster-search">
           <input id="searchInput" type="search" placeholder="Search notes or tags" />
         </div>
+        <div id="clusterFilter" class="cluster-filter"></div>
         <div id="clusterBoard" class="cluster-board"></div>
       </div>
 
@@ -130,6 +131,7 @@ const noteInput = document.querySelector("#noteInput");
 const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
 const searchInput = document.querySelector("#searchInput");
+const clusterFilter = document.querySelector("#clusterFilter");
 const clusterBoard = document.querySelector("#clusterBoard");
 const randomizeBtn = document.querySelector("#randomizeBtn");
 const galaxyBtn = document.querySelector("#galaxyBtn");
@@ -154,6 +156,8 @@ let pointer = { x: 0, y: 0, active: false };
 let dragState = null;
 let clusterClock = 0;
 let searchTerm = "";
+let activeCluster = restored?.activeCluster ?? "all";
+let collapsedClusters = new Set(restored?.collapsedClusters ?? []);
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -186,6 +190,8 @@ function saveState() {
     moodIndex: Number(moodSelect.value),
     notes,
     galaxyMode,
+    activeCluster,
+    collapsedClusters: [...collapsedClusters],
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -244,11 +250,27 @@ function renderTimeline() {
 
 function getFilteredNotes() {
   const term = searchTerm.trim().toLowerCase();
-  if (!term) return notes;
+  if (!term && activeCluster === "all") return notes;
   return notes.filter((note) => {
     const haystack = `${note.text} ${note.tag}`.toLowerCase();
-    return haystack.includes(term);
+    const tagMatch = activeCluster === "all" || note.tag === activeCluster;
+    return haystack.includes(term) && tagMatch;
   });
+}
+
+function getVisibleClusterNames() {
+  const term = searchTerm.trim().toLowerCase();
+  return noteClusters()
+    .filter(({ cluster, indices }) => {
+      const clusterName = cluster.label.toLowerCase();
+      const searchMatch = !term || clusterName.includes(term) || indices.some((index) => {
+        const note = notes[index];
+        return `${note.text} ${note.tag}`.toLowerCase().includes(term);
+      });
+      const activeMatch = activeCluster === "all" || clusterName === activeCluster;
+      return searchMatch && activeMatch && !collapsedClusters.has(clusterName);
+    })
+    .map(({ cluster }) => cluster.label.toLowerCase());
 }
 
 function renderNotes() {
@@ -286,6 +308,7 @@ function renderNotes() {
   noteList.querySelectorAll("select[data-action='tag']").forEach((select) => {
     select.addEventListener("change", handleRetagChange);
   });
+  renderClusterFilter();
 }
 
 function ensureNotePositions() {
@@ -319,7 +342,10 @@ function renderNoteLayer() {
       (note, index) => {
         const x = Math.max(0.08, Math.min(0.92, note.x ?? 0.5));
         const y = Math.max(0.08, Math.min(0.88, note.y ?? 0.5));
-        const active = !searchTerm || `${note.text} ${note.tag}`.toLowerCase().includes(searchTerm.toLowerCase());
+        const clusterName = clusterForTag(note.tag).label.toLowerCase();
+        const active = (!searchTerm || `${note.text} ${note.tag}`.toLowerCase().includes(searchTerm.toLowerCase()))
+          && (activeCluster === "all" || activeCluster === clusterName)
+          && !collapsedClusters.has(clusterName);
         return `
           <button class="note-node ${active ? "" : "is-muted"}" data-index="${index}" style="left:${x * 100}%; top:${y * 100}%;">
             <span>${note.tag}</span>
@@ -404,9 +430,11 @@ function noteClusters() {
 }
 
 function noteConnections() {
-  return noteClusters().flatMap(({ indices }) =>
-    indices.slice(1).map((current, idx) => [indices[idx], current])
-  );
+  return noteClusters()
+    .filter(({ cluster }) => activeCluster === "all" || cluster.label.toLowerCase() === activeCluster)
+    .flatMap(({ indices }) =>
+      indices.slice(1).map((current, idx) => [indices[idx], current])
+    );
 }
 
 function renderClusters() {
@@ -418,16 +446,54 @@ function renderClusters() {
         .map((index) => notes[index]?.text)
         .filter(Boolean)
         .join(" • ");
+      const clusterName = cluster.label.toLowerCase();
+      const isCollapsed = collapsedClusters.has(clusterName);
       return `
-        <article class="cluster-card">
+        <article class="cluster-card ${isCollapsed ? "is-collapsed" : ""}">
           <div class="cluster-card__top">
             <span>${cluster.label}</span>
             <strong>${indices.length}</strong>
           </div>
           <p>${preview || "No notes yet"}</p>
+          <div class="cluster-card__actions">
+            <button type="button" data-cluster="${clusterName}" data-action="focus">Focus</button>
+            <button type="button" data-cluster="${clusterName}" data-action="toggle">${isCollapsed ? "Expand" : "Collapse"}</button>
+          </div>
         </article>`;
     })
     .join("");
+  clusterBoard.querySelectorAll("button[data-action]").forEach((button) => {
+    button.addEventListener("click", handleClusterAction);
+  });
+}
+
+function renderClusterFilter() {
+  const groups = noteClusters();
+  clusterFilter.innerHTML = [
+    `<button type="button" data-cluster="all" class="${activeCluster === "all" ? "is-active" : ""}">All</button>`,
+    ...groups.map(({ cluster }) => `<button type="button" data-cluster="${cluster.label.toLowerCase()}" class="${activeCluster === cluster.label.toLowerCase() ? "is-active" : ""}">${cluster.label}</button>`),
+  ].join("");
+  clusterFilter.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeCluster = button.dataset.cluster;
+      renderNotes();
+      renderTimeline();
+      saveState();
+    });
+  });
+}
+
+function handleClusterAction(event) {
+  const cluster = event.currentTarget.dataset.cluster;
+  const action = event.currentTarget.dataset.action;
+  if (action === "focus") activeCluster = cluster;
+  if (action === "toggle") {
+    if (collapsedClusters.has(cluster)) collapsedClusters.delete(cluster);
+    else collapsedClusters.add(cluster);
+  }
+  renderNotes();
+  renderTimeline();
+  saveState();
 }
 
 function resizeCanvas() {
@@ -659,9 +725,12 @@ function rebalanceClusters() {
   const redistributed = [];
   grouped.forEach((groupNotes, label) => {
     const cluster = Object.values(clusterPalette).find((item) => item.label === label) ?? clusterPalette.other;
+    const clusterName = cluster.label.toLowerCase();
+    const focused = activeCluster === clusterName;
+    const spread = focused ? 0.075 : 0.045;
     groupNotes.forEach((note, index) => {
-      const jitter = 0.045 + index * 0.01;
-      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1) + clusterClock;
+      const jitter = spread + index * 0.01;
+      const angle = (Math.PI * 2 * index) / Math.max(groupNotes.length, 1) + clusterClock + (focused ? 0.25 : 0);
       redistributed.push({
         ...note,
         x: cluster.x + Math.cos(angle) * jitter,
