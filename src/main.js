@@ -122,6 +122,10 @@ app.innerHTML = `
         <h2>Orbit Atlas, distilled.</h2>
         <p class="lede">A clean live board for showing the current shape of your thoughts, clusters, and momentum without the editing chrome.</p>
       </div>
+      <div class="presentation-legend">
+        <span>Legend</span>
+        <div class="presentation-legend__items" id="presentationLegend"></div>
+      </div>
       <div class="presentation-summary">
         <div class="presentation-summary__copy">
           <span>Summary</span>
@@ -147,6 +151,7 @@ app.innerHTML = `
         <div>
           <span>Talking point</span>
           <strong id="presentationTalk">This cluster is where the useful work is gathering.</strong>
+          <p id="presentationTalk2">It stays close to the center because it supports the main shape of the day.</p>
         </div>
         <div class="presentation-story__actions">
           <button id="presentationNextBtn" type="button">Next cluster</button>
@@ -169,6 +174,11 @@ app.innerHTML = `
         <article class="presentation-card presentation-card--wide">
           <span>Cluster board</span>
           <div id="presentationClusters" class="presentation-clusters"></div>
+        </article>
+        <article class="presentation-card presentation-card--wide">
+          <span>Active cluster</span>
+          <strong id="presentationActiveTitle">Focus</strong>
+          <p id="presentationActiveBody">The active group is the one we are currently touring and spotlighting.</p>
         </article>
       </div>
     </section>
@@ -208,8 +218,12 @@ const presentationDominant = document.querySelector("#presentationDominant");
 const presentationSpread = document.querySelector("#presentationSpread");
 const presentationSearch = document.querySelector("#presentationSearch");
 const presentationTalk = document.querySelector("#presentationTalk");
+const presentationTalk2 = document.querySelector("#presentationTalk2");
 const presentationNextBtn = document.querySelector("#presentationNextBtn");
 const presentationAutoBtn = document.querySelector("#presentationAutoBtn");
+const presentationLegend = document.querySelector("#presentationLegend");
+const presentationActiveTitle = document.querySelector("#presentationActiveTitle");
+const presentationActiveBody = document.querySelector("#presentationActiveBody");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -234,6 +248,7 @@ let presentationMode = restored?.presentationMode ?? false;
 let presentationIndex = restored?.presentationIndex ?? 0;
 let presentationAutoPlay = restored?.presentationAutoPlay ?? true;
 let presentationTimer = null;
+let presentationTimerPhase = 0;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -271,6 +286,7 @@ function saveState() {
     presentationMode,
     presentationIndex,
     presentationAutoPlay,
+    presentationTimerPhase,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -359,18 +375,23 @@ function renderPresentationDeck() {
         ? "Calm, anchored, and easy to read"
         : "Light and exploratory";
   const body =
-    dominantCount === 0
-      ? "The board is quiet right now. Add a few notes and the clusters will start to form."
-      : `The ${dominantLabel.toLowerCase()} cluster leads with ${dominantCount} note${dominantCount === 1 ? "" : "s"}, while ${visibleNames.length > 1 ? "the rest stay readable around it" : "the rest remain in the background"}.`;
+      dominantCount === 0
+        ? "The board is quiet right now. Add a few notes and the clusters will start to form."
+        : `The ${dominantLabel.toLowerCase()} cluster leads with ${dominantCount} note${dominantCount === 1 ? "" : "s"}, while ${visibleNames.length > 1 ? "the rest stay readable around it" : "the rest remain in the background"}.`;
   presentationSummaryTitle.textContent = title;
   presentationSummaryBody.textContent = body;
   presentationDominant.textContent = dominantLabel;
   presentationSpread.textContent = spread;
   presentationSearch.textContent = searchLabel;
-  presentationTalk.textContent =
+  const clusterFacts = getClusterFacts(currentTour.cluster, tourCount, totalVisible, dominantLabel);
+  presentationTalk.textContent = clusterFacts[0];
+  presentationTalk2.textContent = clusterFacts[1];
+  presentationActiveTitle.textContent = tourLabel;
+  presentationActiveBody.textContent =
     tourCount === 0
-      ? `The ${tourLabel.toLowerCase()} cluster is empty right now.`
-      : `The ${tourLabel.toLowerCase()} cluster has ${tourCount} note${tourCount === 1 ? "" : "s"}, and it helps explain the whole map.`;
+      ? "This cluster is waiting for a note to arrive."
+      : `It has ${tourCount} note${tourCount === 1 ? "" : "s"} and sits inside the larger story of the board.`;
+  renderLegend();
   presentationClusters.innerHTML = groups
     .map(({ cluster, indices }) => {
       const isActive = activeCluster === "all" || activeCluster === cluster.label.toLowerCase();
@@ -386,6 +407,36 @@ function renderPresentationDeck() {
   presentationAutoBtn.textContent = presentationAutoPlay ? "Auto tour: on" : "Auto tour";
   const spotlightCluster = currentTour.cluster.label.toLowerCase();
   document.body.dataset.spotlight = presentationMode ? spotlightCluster : "off";
+}
+
+function getClusterFacts(cluster, count, totalVisible, dominantLabel) {
+  const label = cluster.label.toLowerCase();
+  const isDominant = cluster.label === dominantLabel;
+  const balanceWord = count >= Math.max(3, Math.round(totalVisible / 2)) ? "dominates" : "supports";
+  const first = count === 0
+    ? `The ${label} cluster is quiet right now.`
+    : isDominant
+      ? `The ${label} cluster leads the board with ${count} note${count === 1 ? "" : "s"}.`
+      : `The ${label} cluster ${balanceWord} the bigger picture with ${count} note${count === 1 ? "" : "s"}.`;
+  const second = count === 0
+    ? "That makes it easy to introduce a new idea without fighting existing structure."
+    : isDominant
+      ? "This is the place to point to when you want the audience to understand the main theme fast."
+      : "It gives the board texture by showing the supporting ideas around the main thread.";
+  return [first, second];
+}
+
+function renderLegend() {
+  const items = Object.values(clusterPalette).filter((item) => item.label !== "Other");
+  presentationLegend.innerHTML = items
+    .map(
+      (item) => `
+        <div class="presentation-legend__item">
+          <span class="presentation-legend__swatch" style="--swatch-hue:${(currentMood.hue + item.colorShift) % 360}"></span>
+          <strong>${item.label}</strong>
+        </div>`
+    )
+    .join("");
 }
 
 function togglePresentationMode(force) {
@@ -408,8 +459,9 @@ function startPresentationAutoplay() {
       stopPresentationAutoplay();
       return;
     }
-    advancePresentationTour();
-  }, 6500);
+    presentationTimerPhase += 1;
+    if (presentationTimerPhase % 2 === 0) advancePresentationTour();
+  }, 3500);
 }
 
 function stopPresentationAutoplay() {
@@ -433,6 +485,7 @@ function advancePresentationTour() {
 
 function togglePresentationAutoplay() {
   presentationAutoPlay = !presentationAutoPlay;
+  presentationTimerPhase = 0;
   if (presentationMode) {
     if (presentationAutoPlay) startPresentationAutoplay();
     else stopPresentationAutoplay();
