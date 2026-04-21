@@ -33,8 +33,8 @@ app.innerHTML = `
           </label>
           <button id="randomizeBtn" type="button">Reshuffle orbit</button>
           <button id="galaxyBtn" type="button" aria-pressed="false">Galaxy mode</button>
-          <button id="exportBtn" type="button">Export state</button>
-          <button id="importBtn" type="button">Import state</button>
+          <button id="exportBtn" type="button">Download backup</button>
+          <button id="importBtn" type="button">Restore backup</button>
         </div>
       </div>
       <div class="hero__visual">
@@ -87,6 +87,7 @@ app.innerHTML = `
           </select>
           <button type="submit">Launch</button>
         </form>
+        <div class="editor-hint">Drag a note in the visual to move it around the orbit. Use the arrows below the note list to reorder the set.</div>
         <ul id="noteList" class="note-list"></ul>
       </div>
     </section>
@@ -111,6 +112,11 @@ const galaxyBtn = document.querySelector("#galaxyBtn");
 const exportBtn = document.querySelector("#exportBtn");
 const importBtn = document.querySelector("#importBtn");
 const noteLayer = document.querySelector("#noteLayer");
+const importFile = document.createElement("input");
+importFile.type = "file";
+importFile.accept = "application/json,.json";
+importFile.hidden = true;
+document.body.appendChild(importFile);
 const restored = loadState();
 
 let currentMood = moods[0];
@@ -216,12 +222,21 @@ function renderNotes() {
     .map(
       (note, index) => `
       <li data-index="${index}">
-        <span>${note.tag}</span>
-        <strong>${note.text}</strong>
+        <div>
+          <span>${note.tag}</span>
+          <strong>${note.text}</strong>
+        </div>
+        <div class="note-actions">
+          <button type="button" data-action="up" data-index="${index}">Up</button>
+          <button type="button" data-action="down" data-index="${index}">Down</button>
+        </div>
       </li>`
     )
     .join("");
   renderNoteLayer();
+  noteList.querySelectorAll("button[data-action]").forEach((button) => {
+    button.addEventListener("click", handleReorderClick);
+  });
 }
 
 function ensureNotePositions() {
@@ -282,6 +297,34 @@ function endDragNote() {
   dragState = null;
 }
 
+function moveNote(index, direction) {
+  const target = index + direction;
+  if (target < 0 || target >= notes.length) return;
+  const next = [...notes];
+  [next[index], next[target]] = [next[target], next[index]];
+  notes = next;
+  renderNotes();
+  saveState();
+}
+
+function handleReorderClick(event) {
+  const index = Number(event.currentTarget.dataset.index);
+  const direction = event.currentTarget.dataset.action === "up" ? -1 : 1;
+  moveNote(index, direction);
+}
+
+function noteConnections() {
+  const groups = new Map();
+  notes.forEach((note, index) => {
+    const key = note.tag || "other";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(index);
+  });
+  return [...groups.values()].flatMap((indices) =>
+    indices.slice(1).map((current, idx) => [indices[idx], current])
+  );
+}
+
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -323,6 +366,23 @@ function draw(now) {
   ctx.beginPath();
   ctx.arc(cx, cy, Math.min(w, h) * 0.46, 0, Math.PI * 2);
   ctx.fill();
+
+  const links = noteConnections();
+  links.forEach(([a, b], index) => {
+    const first = notes[a];
+    const second = notes[b];
+    if (!first || !second) return;
+    const x1 = w * (first.x ?? 0.5);
+    const y1 = h * (first.y ?? 0.5);
+    const x2 = w * (second.x ?? 0.5);
+    const y2 = h * (second.y ?? 0.5);
+    ctx.strokeStyle = `hsla(${(currentMood.hue + index * 14) % 360}, 90%, 70%, 0.22)`;
+    ctx.lineWidth = galaxyMode ? 1.8 : 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cx + Math.sin(index) * 70, cy + Math.cos(index) * 50, x2, y2);
+    ctx.stroke();
+  });
 
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
@@ -399,19 +459,26 @@ galaxyBtn.addEventListener("click", () => {
 
 exportBtn.addEventListener("click", async () => {
   const payload = JSON.stringify({ moodIndex: Number(moodSelect.value), galaxyMode, notes }, null, 2);
-  try {
-    await navigator.clipboard.writeText(payload);
-    exportBtn.textContent = "State copied";
-    setTimeout(() => (exportBtn.textContent = "Export state"), 1200);
-  } catch {
-    window.prompt("Copy Orbit Atlas state", payload);
-  }
+  const blob = new Blob([payload], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `orbit-atlas-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  exportBtn.textContent = "Backup saved";
+  setTimeout(() => (exportBtn.textContent = "Download backup"), 1200);
 });
 
 importBtn.addEventListener("click", () => {
-  const raw = window.prompt("Paste Orbit Atlas state JSON");
-  if (!raw) return;
+  importFile.click();
+});
+
+importFile.addEventListener("change", async () => {
+  const file = importFile.files?.[0];
+  if (!file) return;
   try {
+    const raw = await file.text();
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed.notes)) notes = parsed.notes;
     if (Number.isInteger(parsed.moodIndex)) moodSelect.value = String(parsed.moodIndex);
@@ -422,7 +489,9 @@ importBtn.addEventListener("click", () => {
     renderNotes();
     saveState();
   } catch {
-    window.alert("That JSON could not be read.");
+    window.alert("That backup file could not be read.");
+  } finally {
+    importFile.value = "";
   }
 });
 

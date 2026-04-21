@@ -258,8 +258,23 @@ body.galaxy-mode .hero__visual {
   border-radius: 20px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
 }
 .note-list strong { display: block; margin-top: 6px; }
+.note-actions { display: flex; gap: 8px; }
+.note-actions button {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.82rem;
+}
+.editor-hint {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(16px); }
