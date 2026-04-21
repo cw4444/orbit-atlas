@@ -7,6 +7,8 @@ const moods = [
   { label: "Calm", hue: 154, energy: 38, gravity: 0.82 },
 ];
 
+const STORAGE_KEY = "orbit-atlas:v1";
+
 const seedNodes = [
   ["Morning brief", "priority", 0.86, -0.58, 18],
   ["Client thread", "people", 0.66, 0.26, 16],
@@ -101,6 +103,7 @@ const noteInput = document.querySelector("#noteInput");
 const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
 const randomizeBtn = document.querySelector("#randomizeBtn");
+const restored = loadState();
 
 let currentMood = moods[0];
 let notes = [
@@ -108,6 +111,15 @@ let notes = [
   { text: "Ship one useful thing", tag: "creative" },
   { text: "Answer the obvious messages", tag: "people" },
 ];
+let pointer = { x: 0, y: 0, active: false };
+let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: 0.6 + Math.random() * 1.8,
+  speed: 0.00012 + Math.random() * 0.00026,
+  sway: Math.random() * Math.PI * 2,
+  layer: index % 3,
+}));
 
 let orbitNodes = seedNodes.map(([label, tag, x, y, size], index) => ({
   label,
@@ -119,6 +131,31 @@ let orbitNodes = seedNodes.map(([label, tag, x, y, size], index) => ({
   speed: 0.002 + index * 0.0005,
   radius: 132 + index * 18,
 }));
+
+if (restored?.notes?.length) notes = restored.notes;
+if (Number.isInteger(restored?.moodIndex)) {
+  moodSelect.value = String(restored.moodIndex);
+  currentMood = moods[restored.moodIndex];
+}
+
+function saveState() {
+  const state = {
+    moodIndex: Number(moodSelect.value),
+    notes,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+if (restored?.notes?.length) notes = restored.notes;
+if (Number.isInteger(restored?.moodIndex)) moodSelect.value = String(restored.moodIndex);
 
 function populateMoodOptions() {
   moodSelect.innerHTML = moods
@@ -134,7 +171,9 @@ function setMood(index) {
   focusValue.textContent = `${Math.max(3, Math.round(currentMood.energy / 18))} blocks`;
   driftValue.textContent = currentMood.gravity > 0.6 ? "Anchored" : "Light";
   liftValue.textContent = currentMood.energy > 60 ? "High" : "Building";
+  document.body.dataset.mood = currentMood.label.toLowerCase();
   renderTimeline();
+  saveState();
 }
 
 function renderTimeline() {
@@ -188,6 +227,23 @@ function draw(now) {
   const cx = w / 2;
   const cy = h / 2;
   const t = now * 0.00025;
+  const parallaxX = pointer.active ? (pointer.x - 0.5) * 18 : Math.sin(now * 0.0001) * 8;
+  const parallaxY = pointer.active ? (pointer.y - 0.5) * 18 : Math.cos(now * 0.00011) * 6;
+
+  ctx.fillStyle = "rgba(7, 17, 31, 0.18)";
+  ctx.fillRect(0, 0, w, h);
+
+  backdropParticles.forEach((particle) => {
+    particle.y += particle.speed * (0.5 + currentMood.gravity * 0.7);
+    if (particle.y > 1.08) particle.y = -0.08;
+    const px = w * particle.x + Math.sin(t * 5 + particle.sway) * (18 + particle.layer * 10);
+    const py = h * particle.y + Math.cos(t * 4 + particle.sway) * (12 + particle.layer * 8);
+    ctx.fillStyle = `hsla(${currentMood.hue + particle.layer * 22}, 90%, 72%, ${0.12 + particle.layer * 0.07})`;
+    ctx.beginPath();
+    ctx.arc(px, py, particle.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
   const glow = ctx.createRadialGradient(cx, cy, 24, cx, cy, Math.min(w, h) * 0.44);
   glow.addColorStop(0, `hsla(${currentMood.hue}, 90%, 68%, 0.24)`);
   glow.addColorStop(1, "rgba(7, 17, 31, 0)");
@@ -206,13 +262,13 @@ function draw(now) {
 
   ctx.fillStyle = `hsla(${currentMood.hue}, 85%, 65%, 1)`;
   ctx.beginPath();
-  ctx.arc(cx, cy, 18 + currentMood.energy * 0.08, 0, Math.PI * 2);
+  ctx.arc(cx + parallaxX, cy + parallaxY, 18 + currentMood.energy * 0.08, 0, Math.PI * 2);
   ctx.fill();
 
   orbitNodes.forEach((node, index) => {
     node.angle += node.speed * (currentMood.gravity * 0.8 + 0.5);
-    const x = cx + Math.cos(node.angle + t) * node.radius * (0.74 + index * 0.02);
-    const y = cy + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * 0.58;
+    const x = cx + parallaxX + Math.cos(node.angle + t) * node.radius * (0.74 + index * 0.02);
+    const y = cy + parallaxY + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * 0.58;
 
     ctx.strokeStyle = `hsla(${(currentMood.hue + index * 19) % 360}, 85%, 68%, 0.18)`;
     ctx.beginPath();
@@ -237,6 +293,7 @@ noteForm.addEventListener("submit", (event) => {
   noteInput.value = "";
   renderNotes();
   renderTimeline();
+  saveState();
 });
 
 moodSelect.addEventListener("change", (event) => setMood(Number(event.target.value)));
@@ -249,11 +306,25 @@ randomizeBtn.addEventListener("click", () => {
     radius: 116 + index * 20 + Math.random() * 18,
     speed: 0.0015 + Math.random() * 0.0015,
   }));
+  saveState();
+});
+
+window.addEventListener("pointermove", (event) => {
+  const rect = canvas.getBoundingClientRect();
+  pointer = {
+    x: (event.clientX - rect.left) / rect.width,
+    y: (event.clientY - rect.top) / rect.height,
+    active: event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom,
+  };
+});
+
+window.addEventListener("pointerleave", () => {
+  pointer.active = false;
 });
 
 populateMoodOptions();
 renderNotes();
-setMood(0);
+setMood(Number(moodSelect.value || 0));
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 requestAnimationFrame(draw);
