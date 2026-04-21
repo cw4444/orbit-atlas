@@ -374,6 +374,12 @@ function renderPresentationDeck() {
       : currentMood.gravity > 0.6
         ? "Calm, anchored, and easy to read"
         : "Light and exploratory";
+  const stageTitle =
+    presentationMode && activeCluster !== "all"
+      ? `${tourLabel} on stage`
+      : presentationMode
+        ? "The whole board on stage"
+        : "";
   const body =
       dominantCount === 0
         ? "The board is quiet right now. Add a few notes and the clusters will start to form."
@@ -386,7 +392,7 @@ function renderPresentationDeck() {
   const clusterFacts = getClusterFacts(currentTour.cluster, tourCount, totalVisible, dominantLabel);
   presentationTalk.textContent = clusterFacts[0];
   presentationTalk2.textContent = clusterFacts[1];
-  presentationActiveTitle.textContent = tourLabel;
+  presentationActiveTitle.textContent = stageTitle || tourLabel;
   presentationActiveBody.textContent =
     tourCount === 0
       ? "This cluster is waiting for a note to arrive."
@@ -407,6 +413,7 @@ function renderPresentationDeck() {
   presentationAutoBtn.textContent = presentationAutoPlay ? "Auto tour: on" : "Auto tour";
   const spotlightCluster = currentTour.cluster.label.toLowerCase();
   document.body.dataset.spotlight = presentationMode ? spotlightCluster : "off";
+  document.body.classList.toggle("presentation-stage", presentationMode);
 }
 
 function getClusterFacts(cluster, count, totalVisible, dominantLabel) {
@@ -1032,6 +1039,9 @@ window.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
     event.preventDefault();
     togglePresentationMode();
+  }
+  if (presentationMode && event.key === "ArrowRight") {
+    advancePresentationTour();
   }
 });
 

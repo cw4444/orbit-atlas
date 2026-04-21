@@ -639,3 +639,50 @@ body[data-spotlight="other"] .presentation-clusters__item:nth-child(8) {
 @media (max-width: 640px) {
   .presentation-legend__items { width: 100%; }
 }
+.presentation-stage .shell {
+  width: min(1400px, calc(100% - 24px));
+}
+.presentation-stage .hero {
+  grid-template-columns: 1.05fr 0.95fr;
+}
+.presentation-stage .hero__visual {
+  min-height: 78svh;
+  border-radius: 36px;
+}
+.presentation-stage .presentation-deck {
+  margin-top: 24px;
+}
+.presentation-stage .presentation-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.presentation-stage .presentation-card--wide {
+  grid-column: span 3;
+}
+.presentation-stage .presentation-summary,
+.presentation-stage .presentation-legend,
+.presentation-stage .presentation-story {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+.presentation-stage .presentation-summary {
+  background: rgba(255,255,255,0.05);
+}
+.presentation-stage .presentation-story {
+  background: rgba(255,255,255,0.05);
+}
+.presentation-stage .presentation-deck {
+  background: linear-gradient(180deg, rgba(6, 10, 18, 0.96), rgba(8, 12, 22, 0.92));
+}
+.presentation-stage .presentation-card {
+  background: rgba(255,255,255,0.05);
+}
+.presentation-stage .presentation-card--wide p {
+  max-width: 52rem;
+}
+@media (max-width: 960px) {
+  .presentation-stage .presentation-grid {
+    grid-template-columns: 1fr;
+  }
+  .presentation-stage .presentation-card--wide {
+    grid-column: auto;
+  }
+}
