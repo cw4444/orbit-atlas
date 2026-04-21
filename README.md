@@ -6,8 +6,7 @@ It now remembers your notes and mood in the browser using `localStorage`.
 
 ## Built by Codex
 
-This project was built entirely by Codex from OpenAI.
-
+This project was built entirely by [Codex]([https://duckduckgo.com](https://chatgpt.com/codex/cloud))from OpenAI.
 ## Run locally
 
 ```bash
