@@ -170,6 +170,10 @@ canvas { width: 100%; height: 100%; display: block; }
   font-size: 0.96rem;
   line-height: 1.35;
 }
+.note-node.is-muted {
+  opacity: 0.25;
+  filter: saturate(0.6);
+}
 .core {
   position: absolute;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -252,6 +256,38 @@ body.galaxy-mode .hero__visual {
 .timeline__item strong { display: block; margin-bottom: 4px; }
 .timeline__item p { margin: 0; color: var(--muted); }
 .note-form { display: grid; grid-template-columns: 1.6fr 0.8fr auto; gap: 12px; }
+.cluster-search input { width: 100%; }
+.cluster-board {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.cluster-card {
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+}
+.cluster-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.cluster-card span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+.cluster-card strong {
+  font-size: 1.25rem;
+}
+.cluster-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
 .note-list { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
 .note-list li {
   padding: 14px 16px;
@@ -268,6 +304,10 @@ body.galaxy-mode .hero__visual {
 .note-actions button {
   padding: 0.55rem 0.8rem;
   font-size: 0.82rem;
+}
+.note-actions select {
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
 }
 .editor-hint {
   margin-top: 12px;
@@ -298,6 +338,8 @@ body.galaxy-mode .hero__visual {
   .note-form, .stats { grid-template-columns: 1fr; }
   .controls { align-items: stretch; }
   .controls > * { width: 100%; }
+  .note-list li { flex-direction: column; align-items: stretch; }
+  .note-actions { flex-wrap: wrap; }
   .core { width: 136px; }
   body.galaxy-mode .core { width: 146px; }
   .note-node { width: min(180px, 46vw); }
