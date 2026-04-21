@@ -82,6 +82,17 @@ app.innerHTML = `
         <div class="timeline" id="timeline"></div>
       </div>
 
+      <div class="workspace__panel">
+        <div class="section-heading">
+          <p>Clusters</p>
+          <h2>Mind map groups</h2>
+        </div>
+        <div class="cluster-search">
+          <input id="searchInput" type="search" placeholder="Search notes or tags" />
+        </div>
+        <div id="clusterBoard" class="cluster-board"></div>
+      </div>
+
       <div class="workspace__panel workspace__panel--tall">
         <div class="section-heading">
           <p>Notation</p>
@@ -118,6 +129,8 @@ const noteForm = document.querySelector("#noteForm");
 const noteInput = document.querySelector("#noteInput");
 const tagInput = document.querySelector("#tagInput");
 const noteList = document.querySelector("#noteList");
+const searchInput = document.querySelector("#searchInput");
+const clusterBoard = document.querySelector("#clusterBoard");
 const randomizeBtn = document.querySelector("#randomizeBtn");
 const galaxyBtn = document.querySelector("#galaxyBtn");
 const exportBtn = document.querySelector("#exportBtn");
@@ -140,6 +153,7 @@ let notes = [
 let pointer = { x: 0, y: 0, active: false };
 let dragState = null;
 let clusterClock = 0;
+let searchTerm = "";
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -228,26 +242,49 @@ function renderTimeline() {
     .join("");
 }
 
+function getFilteredNotes() {
+  const term = searchTerm.trim().toLowerCase();
+  if (!term) return notes;
+  return notes.filter((note) => {
+    const haystack = `${note.text} ${note.tag}`.toLowerCase();
+    return haystack.includes(term);
+  });
+}
+
 function renderNotes() {
-  noteList.innerHTML = notes
+  const visibleNotes = getFilteredNotes();
+  noteList.innerHTML = visibleNotes
     .slice(0, 6)
     .map(
-      (note, index) => `
-      <li data-index="${index}">
+      (note) => {
+        const actualIndex = notes.indexOf(note);
+        return `
+      <li data-index="${actualIndex}">
         <div>
           <span>${note.tag}</span>
           <strong>${note.text}</strong>
         </div>
         <div class="note-actions">
-          <button type="button" data-action="up" data-index="${index}">Up</button>
-          <button type="button" data-action="down" data-index="${index}">Down</button>
+          <select data-action="tag" data-index="${actualIndex}">
+            ${Object.keys(clusterPalette)
+              .filter((key) => key !== "other")
+              .map((key) => `<option value="${key}" ${key === note.tag ? "selected" : ""}>${clusterPalette[key].label}</option>`)
+              .join("")}
+          </select>
+          <button type="button" data-action="up" data-index="${actualIndex}">Up</button>
+          <button type="button" data-action="down" data-index="${actualIndex}">Down</button>
         </div>
-      </li>`
+      </li>`;
+      }
     )
     .join("");
   renderNoteLayer();
+  renderClusters();
   noteList.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", handleReorderClick);
+  });
+  noteList.querySelectorAll("select[data-action='tag']").forEach((select) => {
+    select.addEventListener("change", handleRetagChange);
   });
 }
 
@@ -282,8 +319,9 @@ function renderNoteLayer() {
       (note, index) => {
         const x = Math.max(0.08, Math.min(0.92, note.x ?? 0.5));
         const y = Math.max(0.08, Math.min(0.88, note.y ?? 0.5));
+        const active = !searchTerm || `${note.text} ${note.tag}`.toLowerCase().includes(searchTerm.toLowerCase());
         return `
-          <button class="note-node" data-index="${index}" style="left:${x * 100}%; top:${y * 100}%;">
+          <button class="note-node ${active ? "" : "is-muted"}" data-index="${index}" style="left:${x * 100}%; top:${y * 100}%;">
             <span>${note.tag}</span>
             <strong>${note.text}</strong>
           </button>`;
@@ -342,6 +380,15 @@ function handleReorderClick(event) {
   moveNote(index, direction);
 }
 
+function handleRetagChange(event) {
+  const index = Number(event.currentTarget.dataset.index);
+  const tag = event.currentTarget.value;
+  notes = notes.map((note, noteIndex) => (noteIndex === index ? { ...note, tag } : note));
+  ensureNotePositions();
+  renderNotes();
+  saveState();
+}
+
 function clusterForTag(tag) {
   return clusterPalette[tag] ?? clusterPalette.other;
 }
@@ -360,6 +407,27 @@ function noteConnections() {
   return noteClusters().flatMap(({ indices }) =>
     indices.slice(1).map((current, idx) => [indices[idx], current])
   );
+}
+
+function renderClusters() {
+  const groups = noteClusters();
+  clusterBoard.innerHTML = groups
+    .map(({ cluster, indices }) => {
+      const preview = indices
+        .slice(0, 3)
+        .map((index) => notes[index]?.text)
+        .filter(Boolean)
+        .join(" • ");
+      return `
+        <article class="cluster-card">
+          <div class="cluster-card__top">
+            <span>${cluster.label}</span>
+            <strong>${indices.length}</strong>
+          </div>
+          <p>${preview || "No notes yet"}</p>
+        </article>`;
+    })
+    .join("");
 }
 
 function resizeCanvas() {
@@ -509,6 +577,12 @@ noteForm.addEventListener("submit", (event) => {
   renderNotes();
   renderTimeline();
   saveState();
+});
+
+searchInput.addEventListener("input", (event) => {
+  searchTerm = event.target.value;
+  renderNotes();
+  renderTimeline();
 });
 
 moodSelect.addEventListener("change", (event) => setMood(Number(event.target.value)));
