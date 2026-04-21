@@ -122,6 +122,27 @@ app.innerHTML = `
         <h2>Orbit Atlas, distilled.</h2>
         <p class="lede">A clean live board for showing the current shape of your thoughts, clusters, and momentum without the editing chrome.</p>
       </div>
+      <div class="presentation-summary">
+        <div class="presentation-summary__copy">
+          <span>Summary</span>
+          <strong id="presentationSummaryTitle">Clear, steady, and focused</strong>
+          <p id="presentationSummaryBody">The map is mostly balanced with one clear dominant cluster and a gentle drift toward action.</p>
+        </div>
+        <div class="presentation-summary__metrics">
+          <div>
+            <span>Dominant cluster</span>
+            <strong id="presentationDominant">Focus</strong>
+          </div>
+          <div>
+            <span>Spread</span>
+            <strong id="presentationSpread">Compact</strong>
+          </div>
+          <div>
+            <span>Search focus</span>
+            <strong id="presentationSearch">None</strong>
+          </div>
+        </div>
+      </div>
       <div class="presentation-grid">
         <article class="presentation-card">
           <span>Current mood</span>
@@ -171,6 +192,11 @@ const presentationMood = document.querySelector("#presentationMood");
 const presentationCluster = document.querySelector("#presentationCluster");
 const presentationNotes = document.querySelector("#presentationNotes");
 const presentationClusters = document.querySelector("#presentationClusters");
+const presentationSummaryTitle = document.querySelector("#presentationSummaryTitle");
+const presentationSummaryBody = document.querySelector("#presentationSummaryBody");
+const presentationDominant = document.querySelector("#presentationDominant");
+const presentationSpread = document.querySelector("#presentationSpread");
+const presentationSearch = document.querySelector("#presentationSearch");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -297,6 +323,28 @@ function renderPresentationDeck() {
       : activeCluster.charAt(0).toUpperCase() + activeCluster.slice(1);
   presentationNotes.textContent = String(notes.length);
   const groups = noteClusters();
+  const dominantGroup = [...groups].sort((a, b) => b.indices.length - a.indices.length)[0];
+  const dominantLabel = dominantGroup?.cluster.label ?? "None";
+  const dominantCount = dominantGroup?.indices.length ?? 0;
+  const totalVisible = getFilteredNotes().length;
+  const visibleNames = getVisibleClusterNames();
+  const spread = totalVisible >= 6 ? "Wide" : totalVisible >= 3 ? "Balanced" : "Compact";
+  const searchLabel = searchTerm.trim() ? searchTerm.trim() : activeCluster === "all" ? "None" : activeCluster;
+  const title =
+    currentMood.energy > 70
+      ? "Bright, active, and ready to move"
+      : currentMood.gravity > 0.6
+        ? "Calm, anchored, and easy to read"
+        : "Light and exploratory";
+  const body =
+    dominantCount === 0
+      ? "The board is quiet right now. Add a few notes and the clusters will start to form."
+      : `The ${dominantLabel.toLowerCase()} cluster leads with ${dominantCount} note${dominantCount === 1 ? "" : "s"}, while ${visibleNames.length > 1 ? "the rest stay readable around it" : "the rest remain in the background"}.`;
+  presentationSummaryTitle.textContent = title;
+  presentationSummaryBody.textContent = body;
+  presentationDominant.textContent = dominantLabel;
+  presentationSpread.textContent = spread;
+  presentationSearch.textContent = searchLabel;
   presentationClusters.innerHTML = groups
     .map(({ cluster, indices }) => {
       const isActive = activeCluster === "all" || activeCluster === cluster.label.toLowerCase();
