@@ -686,3 +686,44 @@ body[data-spotlight="other"] .presentation-clusters__item:nth-child(8) {
     grid-column: auto;
   }
 }
+.presentation-deck.is-transitioning {
+  opacity: 0.72;
+  transform: scale(0.994);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.presentation-active__notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.presentation-active__notes > div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(0,0,0,0.16);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.presentation-active__notes span {
+  display: block;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  margin-bottom: 8px;
+}
+.presentation-active__notes strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+.presentation-card--wide p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.presentation-stage .presentation-card--wide:nth-last-child(1) {
+  background: rgba(255,255,255,0.05);
+}
+@media (max-width: 640px) {
+  .presentation-active__notes { grid-template-columns: 1fr; }
+}

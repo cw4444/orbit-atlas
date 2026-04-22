@@ -179,6 +179,16 @@ app.innerHTML = `
           <span>Active cluster</span>
           <strong id="presentationActiveTitle">Focus</strong>
           <p id="presentationActiveBody">The active group is the one we are currently touring and spotlighting.</p>
+          <div class="presentation-active__notes">
+            <div>
+              <span>Why it matters</span>
+              <strong id="presentationActiveWhy">It anchors the board.</strong>
+            </div>
+            <div>
+              <span>What to say</span>
+              <strong id="presentationActiveSay">This is the clearest place to start.</strong>
+            </div>
+          </div>
         </article>
       </div>
     </section>
@@ -224,6 +234,8 @@ const presentationAutoBtn = document.querySelector("#presentationAutoBtn");
 const presentationLegend = document.querySelector("#presentationLegend");
 const presentationActiveTitle = document.querySelector("#presentationActiveTitle");
 const presentationActiveBody = document.querySelector("#presentationActiveBody");
+const presentationActiveWhy = document.querySelector("#presentationActiveWhy");
+const presentationActiveSay = document.querySelector("#presentationActiveSay");
 const importFile = document.createElement("input");
 importFile.type = "file";
 importFile.accept = "application/json,.json";
@@ -249,6 +261,7 @@ let presentationIndex = restored?.presentationIndex ?? 0;
 let presentationAutoPlay = restored?.presentationAutoPlay ?? true;
 let presentationTimer = null;
 let presentationTimerPhase = 0;
+let presentationHold = 0;
 let backdropParticles = Array.from({ length: 84 }, (_, index) => ({
   x: Math.random(),
   y: Math.random(),
@@ -287,6 +300,7 @@ function saveState() {
     presentationIndex,
     presentationAutoPlay,
     presentationTimerPhase,
+    presentationHold,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -350,6 +364,7 @@ function renderTimeline() {
 }
 
 function renderPresentationDeck() {
+  if (presentationDeck) presentationDeck.classList.remove("is-transitioning");
   presentationMood.textContent = currentMood.label;
   presentationCluster.textContent =
     activeCluster === "all"
@@ -397,6 +412,16 @@ function renderPresentationDeck() {
     tourCount === 0
       ? "This cluster is waiting for a note to arrive."
       : `It has ${tourCount} note${tourCount === 1 ? "" : "s"} and sits inside the larger story of the board.`;
+  presentationActiveWhy.textContent =
+    tourCount === 0
+      ? "It is ready to catch the next idea."
+      : dominantLabel === tourLabel
+        ? "It is currently shaping the overall mood of the board."
+        : "It supports the main thread with useful detail.";
+  presentationActiveSay.textContent =
+    tourCount === 0
+      ? "This space is open and easy to explain."
+      : `Say that ${tourLabel.toLowerCase()} contains ${tourCount} note${tourCount === 1 ? "" : "s"} and helps keep the map readable.`;
   renderLegend();
   presentationClusters.innerHTML = groups
     .map(({ cluster, indices }) => {
@@ -467,8 +492,16 @@ function startPresentationAutoplay() {
       return;
     }
     presentationTimerPhase += 1;
-    if (presentationTimerPhase % 2 === 0) advancePresentationTour();
-  }, 3500);
+    const groups = noteClusters();
+    const dominantGroup = [...groups].sort((a, b) => b.indices.length - a.indices.length)[0];
+    const dominantLabel = dominantGroup?.cluster.label.toLowerCase();
+    const currentCluster = groups[presentationIndex % Math.max(groups.length, 1)]?.cluster.label.toLowerCase();
+    const holdForDominant = currentCluster && currentCluster === dominantLabel ? 3 : 1;
+    if (presentationTimerPhase >= holdForDominant) {
+      presentationTimerPhase = 0;
+      advancePresentationTour();
+    }
+  }, 2600);
 }
 
 function stopPresentationAutoplay() {
@@ -481,12 +514,14 @@ function stopPresentationAutoplay() {
 function advancePresentationTour() {
   const groups = noteClusters();
   if (!groups.length) return;
+  presentationDeck.classList.add("is-transitioning");
   presentationIndex = (presentationIndex + 1) % groups.length;
   const nextCluster = groups[presentationIndex].cluster.label.toLowerCase();
   activeCluster = nextCluster;
   renderNotes();
   renderTimeline();
   renderPresentationDeck();
+  window.setTimeout(() => presentationDeck.classList.remove("is-transitioning"), 280);
   saveState();
 }
 
