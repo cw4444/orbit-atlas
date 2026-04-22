@@ -727,3 +727,24 @@ body[data-spotlight="other"] .presentation-clusters__item:nth-child(8) {
 @media (max-width: 640px) {
   .presentation-active__notes { grid-template-columns: 1fr; }
 }
+:root {
+  --presentation-focus: 0.5;
+  --presentation-focus-boost: 1;
+}
+.presentation-stage .hero__visual {
+  min-height: calc(68svh + (var(--presentation-focus) * 8svh));
+}
+.presentation-stage .presentation-deck {
+  min-height: calc(18svh + (var(--presentation-focus) * 6svh));
+}
+.presentation-stage .presentation-active__notes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.presentation-stage .presentation-card--wide:last-child {
+  min-height: calc(18svh + (var(--presentation-focus) * 6svh));
+}
+@media (max-width: 960px) {
+  .presentation-stage .hero__visual {
+    min-height: calc(52svh + (var(--presentation-focus) * 6svh));
+  }
+}

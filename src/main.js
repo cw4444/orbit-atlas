@@ -381,6 +381,8 @@ function renderPresentationDeck() {
   const currentTour = orderedGroups[presentationIndex % orderedGroups.length];
   const tourLabel = currentTour.cluster.label;
   const tourCount = currentTour.indices.length;
+  const focusRatio = presentationMode ? Math.min(1, 0.56 + (tourCount * 0.035)) : 0.5;
+  const focusBoost = presentationMode ? Math.min(1.18, 0.9 + (tourCount * 0.04)) : 1;
   const spread = totalVisible >= 6 ? "Wide" : totalVisible >= 3 ? "Balanced" : "Compact";
   const searchLabel = searchTerm.trim() ? searchTerm.trim() : activeCluster === "all" ? "None" : activeCluster;
   const title =
@@ -439,6 +441,8 @@ function renderPresentationDeck() {
   const spotlightCluster = currentTour.cluster.label.toLowerCase();
   document.body.dataset.spotlight = presentationMode ? spotlightCluster : "off";
   document.body.classList.toggle("presentation-stage", presentationMode);
+  document.documentElement.style.setProperty("--presentation-focus", focusRatio.toFixed(3));
+  document.documentElement.style.setProperty("--presentation-focus-boost", focusBoost.toFixed(3));
 }
 
 function getClusterFacts(cluster, count, totalVisible, dominantLabel) {
@@ -883,9 +887,11 @@ function draw(now) {
   orbitNodes.forEach((node, index) => {
     const speedBoost = galaxyMode ? 2.1 : 1;
     node.angle += node.speed * (currentMood.gravity * 0.8 + 0.5) * speedBoost;
-    const orbitRadius = node.radius * zoom * (0.74 + index * 0.02 + (galaxyMode ? 0.08 : 0));
+    const stageBoost = Number(getComputedStyle(document.documentElement).getPropertyValue("--presentation-focus-boost") || 1);
+    const focusRatio = Number(getComputedStyle(document.documentElement).getPropertyValue("--presentation-focus") || 0.5);
+    const orbitRadius = node.radius * zoom * stageBoost * (0.72 + index * 0.018 + (galaxyMode ? 0.08 : 0));
     const x = cx + parallaxX + Math.cos(node.angle + t) * orbitRadius;
-    const y = cy + parallaxY + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * (galaxyMode ? 0.84 : 0.58);
+    const y = cy + parallaxY + Math.sin(node.angle * 0.92 + t * 1.3) * node.radius * (galaxyMode ? 0.84 : 0.58) * (0.92 + focusRatio * 0.15);
     const pulse = galaxyMode ? 0.5 + Math.sin(now * 0.004 + index) * 0.5 : 1;
 
     ctx.strokeStyle = `hsla(${(currentMood.hue + index * 19) % 360}, 85%, 68%, 0.18)`;
